@@ -1,7 +1,30 @@
+networks:
+  finops_net:
+    driver: bridge
+
 services:
+  agent:
+    build: .
+    ports:
+      - "8080:8080"
+    networks:
+      - finops_net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/metrics"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   prometheus:
     image: prom/prometheus:latest
     ports:
       - "9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - finops_net
