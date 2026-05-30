@@ -1,0 +1,12 @@
+{
+  "gpus": {
+    "GPU-mock-0000-0000-000000000001": {
+      "model": "NVIDIA GeForce RTX 4050 Laptop GPU",
+      "hourly_cost_usd": 0.45
+    },
+    "default": {
+      "model": "Generic Cloud GPU",
+      "hourly_cost_usd": 1.00
+    }
+  }
+}
