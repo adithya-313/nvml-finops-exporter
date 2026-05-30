@@ -4,11 +4,18 @@ package gpu
 
 import (
 	"fmt"
+	"math/rand"
 	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 )
+
+func init() {
+	// Seed the global random source so that every call to
+	// generateMockMetrics() produces fresh jitter.
+	rand.Seed(time.Now().UnixNano())
+}
 
 type nvidiaSmiGpuRaw struct {
 	Index          string
@@ -114,14 +121,35 @@ func parseNvidiaSmiOutput(rawGpus []nvidiaSmiGpuRaw) []GpuMetric {
 // where real NVIDIA hardware is not accessible (e.g. inside a Docker
 // container without --gpus passthrough).  This allows the full
 // monitoring pipeline to be validated end-to-end.
+//
+// Each call introduces randomised jitter so the Prometheus time
+// series show realistic variation for the stats engine.
 func generateMockMetrics() SystemStatus {
+	// Power jitter: base 175W +/- 5W
+	powerJitter := 175.0 + (rand.Float64()*10.0 - 5.0)
+
+	// Utilization jitter: base 42% +/- 5pp
+	utilJitter := 42 + rand.Intn(10) - 5
+	if utilJitter < 0 {
+		utilJitter = 0
+	}
+	if utilJitter > 100 {
+		utilJitter = 100
+	}
+
+	// Temperature jitter: base 65C +/- 3C
+	tempJitter := 65 + rand.Intn(6) - 3
+
+	// Memory jitter: base 3072 MiB +/- 256 MiB
+	memJitter := 3072 + rand.Intn(512) - 256
+
 	mockGpu := GpuMetric{
 		Uuid:               "GPU-mock-0000-0000-000000000001",
-		UtilizationPercent: 42,
-		MemoryUsedMb:       3072,
+		UtilizationPercent: uint(utilJitter),
+		MemoryUsedMb:       uint64(memJitter),
 		MemoryTotalMb:      8192,
-		TemperatureC:       65,
-		PowerDrawW:         175.0,
+		TemperatureC:       uint(tempJitter),
+		PowerDrawW:         powerJitter,
 	}
 
 	return SystemStatus{

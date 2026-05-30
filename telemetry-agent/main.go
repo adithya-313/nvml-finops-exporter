@@ -10,17 +10,7 @@ import (
 	"telemetry-agent/internal/gpu"
 )
 
-// globalState holds the result of the last metrics collection so it
-// can be served on every GET /metrics request without re-acquiring
-// the NVML library lock every time.
-var globalState gpu.SystemStatus
-
 func main() {
-	// Immediately attempt to collect GPU metrics.  If NVML is not
-	// available the global state will be set to "degraded" with a
-	// descriptive error message.
-	globalState = gpu.CollectGpuMetrics()
-
 	// Register the HTTP endpoints.
 	http.HandleFunc("/api/v1/status", jsonStatusHandler)
 	http.HandleFunc("/metrics", prometheusMetricsHandler)
@@ -37,10 +27,19 @@ func main() {
 	log.Fatal(server.ListenAndServe())
 }
 
+// getCurrentMetrics collects a fresh snapshot of GPU telemetry.
+// Each call produces a new set of randomised values so that entropy
+// is visible across sequential requests.
+func getCurrentMetrics() gpu.SystemStatus {
+	return gpu.CollectGpuMetrics()
+}
+
 // jsonStatusHandler is the HTTP handler for GET /api/v1/status.  It
-// returns the full JSON status payload (the original /metrics output).
+// returns a fresh JSON status payload with every request.
 func jsonStatusHandler(responseWriter http.ResponseWriter, request *http.Request) {
-	jsonPayload, marshalError := json.MarshalIndent(globalState, "", "  ")
+	currentState := getCurrentMetrics()
+
+	jsonPayload, marshalError := json.MarshalIndent(currentState, "", "  ")
 	if marshalError != nil {
 		http.Error(responseWriter, "internal server error", http.StatusInternalServerError)
 		return
@@ -56,15 +55,16 @@ func jsonStatusHandler(responseWriter http.ResponseWriter, request *http.Request
 }
 
 // prometheusMetricsHandler is the HTTP handler for GET /metrics.  It
-// writes GPU telemetry in plain-text Prometheus exposition format so
-// that a Prometheus server can scrape it directly.
+// collects fresh GPU telemetry and writes it in Prometheus exposition
+// format so that a Prometheus server can scrape it directly.
 func prometheusMetricsHandler(responseWriter http.ResponseWriter, request *http.Request) {
+	currentState := getCurrentMetrics()
+
 	responseWriter.Header().Set("Content-Type", "text/plain; version=0.0.4")
 	responseWriter.WriteHeader(http.StatusOK)
 
-	// The system-level metrics: healthy = 1, degraded = 0.
 	systemHealth := 0
-	if globalState.SystemStatus == "healthy" {
+	if currentState.SystemStatus == "healthy" {
 		systemHealth = 1
 	}
 
@@ -72,8 +72,7 @@ func prometheusMetricsHandler(responseWriter http.ResponseWriter, request *http.
 	textOutput += fmt.Sprintf("# TYPE gpu_system_health gauge\n")
 	textOutput += fmt.Sprintf("gpu_system_health %d\n", systemHealth)
 
-	// Per-GPU metrics.
-	for _, gpuMetric := range globalState.Gpus {
+	for _, gpuMetric := range currentState.Gpus {
 		uuidLabel := gpuMetric.Uuid
 
 		textOutput += fmt.Sprintf("\n# HELP gpu_utilization_percent GPU Engine Utilization\n")
