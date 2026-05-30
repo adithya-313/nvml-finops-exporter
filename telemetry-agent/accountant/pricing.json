@@ -1,6 +1,6 @@
 {
   "gpus": {
-    "GPU-mock-0000-0000-000000000001": {
+    "GPU-mock-0000-0000-00000": {
       "model": "NVIDIA GeForce RTX 4050 Laptop GPU",
       "hourly_cost_usd": 0.45
     },

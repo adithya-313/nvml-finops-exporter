@@ -1,21 +1,15 @@
-# Stage 1: Build the Go binary for linux/amd64
-FROM golang:alpine AS builder
-
-WORKDIR /build
-
+# Stage 1: Build
+FROM golang:1.21-alpine AS builder
+WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
-
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /build/telemetry-agent .
+# Disable CGO for static binary, build for Linux
+RUN CGO_ENABLED=0 GOOS=linux go build -o telemetry-agent .
 
-# Stage 2: Minimal runtime image
+# Stage 2: Run
 FROM alpine:latest
-
-RUN apk add --no-cache ca-certificates
-
-COPY --from=builder /build/telemetry-agent /usr/local/bin/telemetry-agent
-
+WORKDIR /root/
+COPY --from=builder /app/telemetry-agent .
 EXPOSE 8080
-
-ENTRYPOINT ["telemetry-agent"]
+CMD ["./telemetry-agent"]

@@ -1,3 +1,5 @@
+version: '3.8'
+
 networks:
   finops_net:
     driver: bridge
@@ -9,16 +11,14 @@ services:
       - "8080:8080"
     networks:
       - finops_net
+    # GPU Passthrough (Will degrade gracefully to mock if unavailable)
     deploy:
       resources:
         reservations:
           devices:
-            - capabilities: [gpu]
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/metrics"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   prometheus:
     image: prom/prometheus:latest
