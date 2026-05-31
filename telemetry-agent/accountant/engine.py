@@ -1,7 +1,8 @@
 import time
 import statistics
-import requests
 import json
+import asyncio
+import aiohttp
 
 PROMETHEUS_URL = "http://localhost:9090/api/v1/query"
 RATE_KWH = 0.15
@@ -13,7 +14,7 @@ try:
 except FileNotFoundError:
     pricing_db = {"default": {"hourly_cost_usd": 1.00}}
 
-class CircuitBreaker:
+class AsyncCircuitBreaker:
     def __init__(self):
         self.state = "CLOSED"
         self.failures = 0
@@ -21,7 +22,7 @@ class CircuitBreaker:
         self.last_failure_time = 0
         self.recovery_timeout = 30 
 
-    def call(self, func, *args, **kwargs):
+    async def call(self, func, *args, **kwargs):
         if self.state == "OPEN":
             if time.time() - self.last_failure_time > self.recovery_timeout:
                 self.state = "HALF-OPEN"
@@ -29,7 +30,7 @@ class CircuitBreaker:
             else:
                 raise Exception("Circuit Breaker is OPEN. Halting requests.")
         try:
-            result = func(*args, **kwargs)
+            result = await func(*args, **kwargs)
             if self.state == "HALF-OPEN":
                 self.state = "CLOSED"
                 self.failures = 0
@@ -43,77 +44,79 @@ class CircuitBreaker:
                 print(f"[CIRCUIT BREAKER: TRIPPED TO OPEN] Failures exceeded {self.threshold}.")
             raise e
 
-cb = CircuitBreaker()
+cb = AsyncCircuitBreaker()
 
-def fetch_metric(metric_name):
-    # Fetch 5-minute rolling window
-    response = requests.get(f"{PROMETHEUS_URL}?query={metric_name}[5m]", timeout=5)
-    response.raise_for_status()
-    return response.json()["data"]["result"]
+async def fetch_metric(session, metric_name):
+    async with session.get(f"{PROMETHEUS_URL}?query={metric_name}[5m]", timeout=5) as response:
+        response.raise_for_status()
+        data = await response.json()
+        return data["data"]["result"]
 
-print("Starting FinOps Engine...")
-
-while True:
-    try:
-        power_data = cb.call(fetch_metric, "gpu_power_draw_w")
-        util_data = cb.call(fetch_metric, "gpu_utilization_percent")
-        mem_used = cb.call(fetch_metric, "gpu_memory_used_mb")
-        mem_total = cb.call(fetch_metric, "gpu_memory_total_mb")
-
-        print("="*60)
-        print(f"  GPU FINOPS REPORT  ({time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())})")
-        print("="*60)
-
-        for p_target in power_data:
-            uuid = p_target["metric"].get("uuid", "unknown")
-            # Extract power values (index 1 in the [timestamp, value] pair)
-            p_values = [float(val[1]) for val in p_target["values"]]
-            
-            if not p_values:
-                continue
-
-            latest_power = p_values[-1]
-            mean_power = statistics.mean(p_values)
-            stdev = statistics.stdev(p_values) if len(p_values) > 1 else 0.0001
-            stdev = stdev if stdev > 0 else 0.0001 
-            z_score = (latest_power - mean_power) / stdev
-
-            # Cost Mapping
-            cost_profile = pricing_db.get(uuid, pricing_db["default"])
-            burn_rate = cost_profile["hourly_cost_usd"]
-
-            alerts = []
-            if abs(z_score) > 2.0:
-                alerts.append(f"[ANOMALY: Z-SCORE {z_score:+.2f}]")
-
-            # Match corresponding utilization and memory
-            latest_util = 0
-            for u_target in util_data:
-                if u_target["metric"].get("uuid") == uuid:
-                    latest_util = float(u_target["values"][-1][1])
-            
-            mem_ratio = 0
-            latest_used = 0
-            latest_total = 1
-            for mu in mem_used:
-                if mu["metric"].get("uuid") == uuid:
-                    latest_used = float(mu["values"][-1][1])
-            for mt in mem_total:
-                if mt["metric"].get("uuid") == uuid:
-                    latest_total = float(mt["values"][-1][1])
-            
-            mem_ratio = latest_used / latest_total if latest_total > 0 else 0
-
-            # Heuristics
-            if latest_util < 5 and latest_power > 50:
-                alerts.append("[WARNING: IDLE BURN DETECTED]")
-            if latest_util < 5 and mem_ratio > 0.90:
-                alerts.append("[CRITICAL: ZOMBIE PROCESS DETECTED - VRAM HOG]")
-
-            alert_str = " ".join(alerts)
-            print(f"[{uuid[:15]}...] Pwr: {latest_power:.1f}W | Mean: {mean_power:.1f}W | Rate: ${burn_rate:.2f}/hr | {alert_str}")
-
-    except Exception as e:
-        print(f"Engine Error: {e}")
+async def main():
+    print("Starting Async FinOps Engine...")
     
-    time.sleep(10)
+    # Use a single persistent session for connection pooling
+    async with aiohttp.ClientSession() as session:
+        while True:
+            start_time = time.perf_counter()
+            try:
+                # Fire all 4 queries concurrently
+                results = await asyncio.gather(
+                    cb.call(fetch_metric, session, "gpu_power_draw_w"),
+                    cb.call(fetch_metric, session, "gpu_utilization_percent"),
+                    cb.call(fetch_metric, session, "gpu_memory_used_mb"),
+                    cb.call(fetch_metric, session, "gpu_memory_total_mb"),
+                    return_exceptions=False 
+                )
+                
+                power_data, util_data, mem_used, mem_total = results
+
+                print("="*70)
+                print(f"  GPU FINOPS REPORT  ({time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())})")
+                print("="*70)
+
+                for p_target in power_data:
+                    uuid = p_target["metric"].get("uuid", "unknown")
+                    p_values = [float(val[1]) for val in p_target["values"]]
+                    
+                    if not p_values:
+                        continue
+
+                    latest_power = p_values[-1]
+                    mean_power = statistics.mean(p_values)
+                    stdev = statistics.stdev(p_values) if len(p_values) > 1 else 0.0001
+                    stdev = stdev if stdev > 0 else 0.0001 
+                    z_score = (latest_power - mean_power) / stdev
+
+                    cost_profile = pricing_db.get(uuid, pricing_db["default"])
+                    burn_rate = cost_profile["hourly_cost_usd"]
+
+                    alerts = []
+                    if abs(z_score) > 2.0:
+                        alerts.append(f"[ANOMALY: Z-SCORE {z_score:+.2f}]")
+
+                    latest_util = next((float(u["values"][-1][1]) for u in util_data if u["metric"].get("uuid") == uuid), 0)
+                    latest_used = next((float(mu["values"][-1][1]) for mu in mem_used if mu["metric"].get("uuid") == uuid), 0)
+                    latest_total = next((float(mt["values"][-1][1]) for mt in mem_total if mt["metric"].get("uuid") == uuid), 1)
+                    
+                    mem_ratio = latest_used / latest_total if latest_total > 0 else 0
+
+                    if latest_util < 5 and latest_power > 50:
+                        alerts.append("[WARNING: IDLE BURN DETECTED]")
+                    if latest_util < 5 and mem_ratio > 0.90:
+                        alerts.append("[CRITICAL: ZOMBIE PROCESS DETECTED - VRAM HOG]")
+
+                    alert_str = " ".join(alerts)
+                    print(f"[{uuid[:15]}...] Pwr: {latest_power:.1f}W | Rate: ${burn_rate:.2f}/hr | {alert_str}")
+
+                execution_time = (time.perf_counter() - start_time) * 1000
+                print(f"-> Async Loop Execution Time: {execution_time:.2f} ms")
+
+            except Exception as e:
+                print(f"Engine Error: {e}")
+            
+            # Simulated 1s accelerated load for benchmark comparison
+            await asyncio.sleep(1) 
+
+if __name__ == "__main__":
+    asyncio.run(main())
