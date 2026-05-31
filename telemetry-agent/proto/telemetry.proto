@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package telemetry.v1;
+
+// Go package output mapping
+option go_package = "github.com/adithya-313/nvml-finops-exporter/internal/pb";
+
+// Service Definition
+service GpuTelemetry {
+  // Unary RPC to pull latest metrics
+  rpc GetMetrics (TelemetryRequest) returns (TelemetryResponse);
+}
+
+// Empty request (equivalent to a GET without params)
+message TelemetryRequest {}
+
+message GpuMetric {
+  string uuid = 1;
+  double utilization_percent = 2;
+  uint64 memory_used_mb = 3;
+  uint64 memory_total_mb = 4;
+  double temperature_c = 5;
+  double power_draw_w = 6;
+}
+
+message TelemetryResponse {
+  string system_status = 1;
+  string error_message = 2;
+  repeated GpuMetric gpus = 3;
+  int64 timestamp_utc = 4;
+}
