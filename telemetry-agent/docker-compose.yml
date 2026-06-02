@@ -8,7 +8,7 @@ services:
   agent:
     build: .
     ports:
-      - "8080:8080"
+      - "50051:50051"
     networks:
       - finops_net
     # GPU Passthrough (Will degrade gracefully to mock if unavailable)
@@ -19,12 +19,3 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-
-  prometheus:
-    image: prom/prometheus:latest
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    networks:
-      - finops_net
