@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0ftelemetry.proto\x12\x0ctelemetry.v1\"\x12\n\x10TelemetryRequest\"\x94\x01\n\tGpuMetric\x12\x0c\n\x04uuid\x18\x01 \x01(\t\x12\x1b\n\x13utilization_percent\x18\x02 \x01(\x01\x12\x16\n\x0ememory_used_mb\x18\x03 \x01(\x04\x12\x17\n\x0fmemory_total_mb\x18\x04 \x01(\x04\x12\x15\n\rtemperature_c\x18\x05 \x01(\x01\x12\x14\n\x0cpower_draw_w\x18\x06 \x01(\x01\"\x7f\n\x11TelemetryResponse\x12\x15\n\rsystem_status\x18\x01 \x01(\t\x12\x15\n\rerror_message\x18\x02 \x01(\t\x12%\n\x04gpus\x18\x03 \x03(\x0b\x32\x17.telemetry.v1.GpuMetric\x12\x15\n\rtimestamp_utc\x18\x04 \x01(\x03\x32]\n\x0cGpuTelemetry\x12M\n\nGetMetrics\x12\x1e.telemetry.v1.TelemetryRequest\x1a\x1f.telemetry.v1.TelemetryResponseB9Z7github.com/adithya-313/nvml-finops-exporter/internal/pbb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0ftelemetry.proto\x12\x0ctelemetry.v1\"\x12\n\x10TelemetryRequest\"\x94\x01\n\tGpuMetric\x12\x0c\n\x04uuid\x18\x01 \x01(\t\x12\x1b\n\x13utilization_percent\x18\x02 \x01(\x01\x12\x16\n\x0ememory_used_mb\x18\x03 \x01(\x04\x12\x17\n\x0fmemory_total_mb\x18\x04 \x01(\x04\x12\x15\n\rtemperature_c\x18\x05 \x01(\x01\x12\x14\n\x0cpower_draw_w\x18\x06 \x01(\x01\"\x96\x01\n\x11TelemetryResponse\x12\x15\n\rsystem_status\x18\x01 \x01(\t\x12\x15\n\rerror_message\x18\x02 \x01(\t\x12%\n\x04gpus\x18\x03 \x03(\x0b\x32\x17.telemetry.v1.GpuMetric\x12\x15\n\rtimestamp_utc\x18\x04 \x01(\x03\x12\x15\n\rntp_offset_ms\x18\x05 \x01(\x03\x32]\n\x0cGpuTelemetry\x12M\n\nGetMetrics\x12\x1e.telemetry.v1.TelemetryRequest\x1a\x1f.telemetry.v1.TelemetryResponseB9Z7github.com/adithya-313/nvml-finops-exporter/internal/pbb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -36,8 +36,8 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_TELEMETRYREQUEST']._serialized_end=51
   _globals['_GPUMETRIC']._serialized_start=54
   _globals['_GPUMETRIC']._serialized_end=202
-  _globals['_TELEMETRYRESPONSE']._serialized_start=204
-  _globals['_TELEMETRYRESPONSE']._serialized_end=331
-  _globals['_GPUTELEMETRY']._serialized_start=333
-  _globals['_GPUTELEMETRY']._serialized_end=426
+  _globals['_TELEMETRYRESPONSE']._serialized_start=205
+  _globals['_TELEMETRYRESPONSE']._serialized_end=355
+  _globals['_GPUTELEMETRY']._serialized_start=357
+  _globals['_GPUTELEMETRY']._serialized_end=450
 # @@protoc_insertion_point(module_scope)

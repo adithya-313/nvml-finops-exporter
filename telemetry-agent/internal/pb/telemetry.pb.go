@@ -148,6 +148,7 @@ type TelemetryResponse struct {
 	ErrorMessage  string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	Gpus          []*GpuMetric           `protobuf:"bytes,3,rep,name=gpus,proto3" json:"gpus,omitempty"`
 	TimestampUtc  int64                  `protobuf:"varint,4,opt,name=timestamp_utc,json=timestampUtc,proto3" json:"timestamp_utc,omitempty"`
+	NtpOffsetMs   int64                  `protobuf:"varint,5,opt,name=ntp_offset_ms,json=ntpOffsetMs,proto3" json:"ntp_offset_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -210,6 +211,13 @@ func (x *TelemetryResponse) GetTimestampUtc() int64 {
 	return 0
 }
 
+func (x *TelemetryResponse) GetNtpOffsetMs() int64 {
+	if x != nil {
+		return x.NtpOffsetMs
+	}
+	return 0
+}
+
 var File_proto_telemetry_proto protoreflect.FileDescriptor
 
 const file_proto_telemetry_proto_rawDesc = "" +
@@ -223,12 +231,13 @@ const file_proto_telemetry_proto_rawDesc = "" +
 	"\x0fmemory_total_mb\x18\x04 \x01(\x04R\rmemoryTotalMb\x12#\n" +
 	"\rtemperature_c\x18\x05 \x01(\x01R\ftemperatureC\x12 \n" +
 	"\fpower_draw_w\x18\x06 \x01(\x01R\n" +
-	"powerDrawW\"\xaf\x01\n" +
+	"powerDrawW\"\xd3\x01\n" +
 	"\x11TelemetryResponse\x12#\n" +
 	"\rsystem_status\x18\x01 \x01(\tR\fsystemStatus\x12#\n" +
 	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x12+\n" +
 	"\x04gpus\x18\x03 \x03(\v2\x17.telemetry.v1.GpuMetricR\x04gpus\x12#\n" +
-	"\rtimestamp_utc\x18\x04 \x01(\x03R\ftimestampUtc2]\n" +
+	"\rtimestamp_utc\x18\x04 \x01(\x03R\ftimestampUtc\x12\"\n" +
+	"\rntp_offset_ms\x18\x05 \x01(\x03R\vntpOffsetMs2]\n" +
 	"\fGpuTelemetry\x12M\n" +
 	"\n" +
 	"GetMetrics\x12\x1e.telemetry.v1.TelemetryRequest\x1a\x1f.telemetry.v1.TelemetryResponseB9Z7github.com/adithya-313/nvml-finops-exporter/internal/pbb\x06proto3"

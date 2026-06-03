@@ -27,13 +27,15 @@ class GpuMetric(_message.Message):
     def __init__(self, uuid: _Optional[str] = ..., utilization_percent: _Optional[float] = ..., memory_used_mb: _Optional[int] = ..., memory_total_mb: _Optional[int] = ..., temperature_c: _Optional[float] = ..., power_draw_w: _Optional[float] = ...) -> None: ...
 
 class TelemetryResponse(_message.Message):
-    __slots__ = ("system_status", "error_message", "gpus", "timestamp_utc")
+    __slots__ = ("system_status", "error_message", "gpus", "timestamp_utc", "ntp_offset_ms")
     SYSTEM_STATUS_FIELD_NUMBER: _ClassVar[int]
     ERROR_MESSAGE_FIELD_NUMBER: _ClassVar[int]
     GPUS_FIELD_NUMBER: _ClassVar[int]
     TIMESTAMP_UTC_FIELD_NUMBER: _ClassVar[int]
+    NTP_OFFSET_MS_FIELD_NUMBER: _ClassVar[int]
     system_status: str
     error_message: str
     gpus: _containers.RepeatedCompositeFieldContainer[GpuMetric]
     timestamp_utc: int
-    def __init__(self, system_status: _Optional[str] = ..., error_message: _Optional[str] = ..., gpus: _Optional[_Iterable[_Union[GpuMetric, _Mapping]]] = ..., timestamp_utc: _Optional[int] = ...) -> None: ...
+    ntp_offset_ms: int
+    def __init__(self, system_status: _Optional[str] = ..., error_message: _Optional[str] = ..., gpus: _Optional[_Iterable[_Union[GpuMetric, _Mapping]]] = ..., timestamp_utc: _Optional[int] = ..., ntp_offset_ms: _Optional[int] = ...) -> None: ...

@@ -106,8 +106,12 @@ async def main():
                     alert_str = " ".join(alerts)
                     print(f"[{uuid[:15]}...] Pwr: {latest_power:.1f}W | Util: {latest_util:.0f}% | Mem: {gpu.memory_used_mb:.0f}/{gpu.memory_total_mb:.0f} MiB | Rate: ${burn_rate:.2f}/hr | {alert_str}")
 
+                ntp_offset = response.ntp_offset_ms
+                if abs(ntp_offset) > 50:
+                    print(f"[CRITICAL TIME DRIFT] Host clock desynchronized by {ntp_offset}ms. Time-series math hazard.")
+
                 execution_time = (time.perf_counter() - start_time) * 1000
-                print(f"-> gRPC Loop Execution Time: {execution_time:.2f} ms")
+                print(f"-> gRPC Loop Execution Time: {execution_time:.2f} ms  |  NTP offset: {ntp_offset} ms")
 
             except Exception as e:
                 print(f"Engine Error: {e}")

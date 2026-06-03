@@ -28,4 +28,5 @@ message TelemetryResponse {
   string error_message = 2;
   repeated GpuMetric gpus = 3;
   int64 timestamp_utc = 4;
+  int64 ntp_offset_ms = 5;
 }
