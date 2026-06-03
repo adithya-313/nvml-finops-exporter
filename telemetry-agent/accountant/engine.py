@@ -123,8 +123,8 @@ async def main():
                 if abs(ntp_offset) > 50:
                     print(f"[CRITICAL TIME DRIFT] Host clock desynchronized by {ntp_offset}ms. Time-series math hazard.")
 
-                execution_time = (time.perf_counter() - start_time) * 1000
-                print(f"-> gRPC Loop Execution Time: {execution_time:.2f} ms  |  NTP offset: {ntp_offset} ms")
+                loop_time_ms = (time.perf_counter() - start_time) * 1000
+                print(f"-> V2 Loop Execution Time (gRPC + Mahalanobis): {loop_time_ms:.2f} ms  |  NTP offset: {ntp_offset} ms")
 
             except Exception as e:
                 print(f"Engine Error: {e}")

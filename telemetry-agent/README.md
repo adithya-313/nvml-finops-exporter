@@ -35,6 +35,10 @@ docker compose up --build
 cd accountant && python engine.py
 ```
 
+## Performance
+
+Latency reduced from **80 ms (V1 sync HTTP)** to **6.57 ms (V2 gRPC + Mahalanobis)** — a 91.8% improvement. The I/O bottleneck from sequential Prometheus range queries was eliminated by gRPC's efficient binary transport; the remaining time is dominated by `np.linalg.pinv` of the 4D covariance matrix. Full benchmarks in `docs/BENCHMARKS.md`.
+
 Proto stubs are compiled into `internal/pb/` (Go) and `accountant/pb/` (Python). Recompile with:
 
 ```bash

@@ -34,3 +34,19 @@
 - `asyncio.gather` eliminated the sequential HTTP I/O bottleneck—queries now overlap in wall-clock time
 - Persistent `aiohttp.ClientSession` avoided per-request TCP handshake overhead
 - Circuit breaker remains stable across async boundary (OPEN→HALF_OPEN→OPEN transitions verified)
+
+## V2 Enterprise Baseline (Docker / gRPC / Mahalanobis ML)
+*Date: 2026-06-03*
+
+### Methodology
+- **Transport:** gRPC (Unary)
+- **Math Payload:** Multi-Variate Covariance Matrix & Pseudo-Inverse (4D feature vectors)
+- **NTP Drift Check:** Active (Mutex Locked)
+
+### Metrics
+- **Python Engine Execution Time:** 6.57 ms (avg steady-state post-calibration, 5 consecutive loops)
+- **V1 to V2 Delta:** 91.8% reduction (80 ms → 6.57 ms)
+- **First post-calibration loop (numpy cold-start):** 18.65 ms
+
+### Bottleneck Analysis
+- **System State:** The network I/O bottleneck was eradicated by gRPC. The primary time cost is now the CPU calculating the pseudo-inverse of the covariance matrix (`np.linalg.pinv`), which remains highly efficient and well under the 1-second system threshold.
