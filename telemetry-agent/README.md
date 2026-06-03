@@ -1,16 +1,43 @@
 # telemetry-agent
 
-A lightweight Go agent that exposes NVIDIA GPU telemetry via an HTTP `/metrics` endpoint using NVML.
+A gRPC-based telemetry and FinOps engine for NVIDIA GPU infrastructure. The stack consists of a Go gRPC server that collects GPU metrics via NVML, and a Python asynchronous FinOps engine that performs multi-variate anomaly detection, NTP time drift tracking, circuit breaker resilience, and wasted-spend calculations.
 
-## Design
+## Architecture
 
-- **`internal/gpu/nvml.go`** – Wraps the NVIDIA Management Library (NVML) Go bindings.  The only public function, `CollectGpuMetrics`, returns a `SystemStatus` struct that is either `healthy` (with per-GPU metrics) or `degraded` (with an error message).
-- **`main.go`** – HTTP server on `:8080`.  On startup it calls `CollectGpuMetrics` once; the result is served on every `GET /metrics` request.  If NVML cannot be initialised the server still boots and reports `degraded`.
+### Go gRPC Telemetry Agent (`main.go`)
+
+- Exposes a `GpuTelemetry` gRPC service (defined in `proto/telemetry.proto`) on port `:50051`.
+- Backed by platform-split NVML backends in `internal/gpu/`:
+  - `nvml_windows.go` — NVML syscall loader (Windows).
+  - `nvml_linux.go` — `nvidia-smi` parser with mock-data fallback when no GPU is available.
+- Runs a background `pollNTP()` goroutine that queries `time.google.com` via `github.com/beevik/ntp` every 60s; the offset is attached to every `TelemetryResponse`.
+- Multi-stage Dockerfile (`golang:alpine` → `alpine:latest`); compose stack on `finops_net`.
+
+### Python Async FinOps Engine (`accountant/engine.py`)
+
+- Asynchronous gRPC client using `grpc.aio` that continuously streams metrics from the agent.
+- Maintains per-GPU rolling feature-vector deques (`[util%, mem_ratio, temp°C, power_W]`) for anomaly detection.
+
+## Core Features
+
+- **Mahalanobis Multi-Variate Anomaly Detection** — Computes distance across 4 dimensions simultaneously. A calibration phase gathers 50 baseline samples; the covariance matrix is inverted via `np.linalg.pinv` for numerical stability. D_M > 3.5 triggers a `[CRITICAL ANOMALY: MULTI-VARIATE DEVIATION]` alert.
+- **NTP Time Drift Tracking** — Offset from `pollNTP()` is displayed on every loop iteration. An `|offset| > 50ms` fires `[CRITICAL TIME DRIFT]`.
+- **Async Circuit Breaker** — Wraps gRPC calls: 3 consecutive failures open the circuit for a 30s recovery timeout, then transitions to half-open for retry.
+- **Wasted Spend Calculation** — Evaluates idle-burn (util < 5% and power > 50W) and zombie GPUs (util < 5% and memory ratio > 0.90); costs are looked up from `pricing.json`.
 
 ## Usage
 
 ```bash
-go build -o telemetry-agent .
-./telemetry-agent &
-curl -s http://localhost:8080/metrics | jq
+# Start the agent (Docker)
+docker compose up --build
+
+# Run the FinOps engine
+cd accountant && python engine.py
+```
+
+Proto stubs are compiled into `internal/pb/` (Go) and `accountant/pb/` (Python). Recompile with:
+
+```bash
+protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative -I proto proto/telemetry.proto
+python -m grpc_tools.protoc -I ../proto --python_out=. --grpc_python_out=. ../proto/telemetry.proto
 ```
