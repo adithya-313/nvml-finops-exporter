@@ -4,6 +4,7 @@ import json
 import asyncio
 import sys
 from collections import deque
+from typing import Dict, Any
 
 import numpy as np
 from scipy.spatial.distance import mahalanobis
@@ -14,28 +15,65 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "pb"))
 import telemetry_pb2
 import telemetry_pb2_grpc
 
-RATE_KWH = 0.15
+# ---------------------------------------------------------------------------
+# Pricing configuration with graceful degradation
+# ---------------------------------------------------------------------------
+DEFAULT_HOURLY_COST_USD: float = 1.00
+RATE_KWH: float = 0.15
 
-# Load Pricing
+_pricing_json_path: str = os.path.join(os.path.dirname(__file__), "pricing.json")
+
 try:
-    with open(os.path.join(os.path.dirname(__file__), "pricing.json"), "r") as f:
-        pricing_db = json.load(f)["gpus"]
-except FileNotFoundError:
-    pricing_db = {"default": {"hourly_cost_usd": 1.00}}
+    with open(_pricing_json_path, "r", encoding="utf-8") as _f:
+        _raw: Any = json.load(_f)
+        if not isinstance(_raw, dict) or "gpus" not in _raw:
+            raise ValueError("pricing.json schema invalid: missing top-level 'gpus' key")
+        pricing_db: Dict[str, Dict[str, Any]] = _raw["gpus"]
+        # Validate that every entry has the required field
+        for _key, _val in pricing_db.items():
+            if not isinstance(_val, dict) or "hourly_cost_usd" not in _val:
+                raise ValueError(f"pricing.json entry '{_key}' missing 'hourly_cost_usd'")
+except (FileNotFoundError, json.JSONDecodeError, ValueError, KeyError, TypeError) as _exc:
+    print(f"[WARN] pricing.json load failed ({_exc}); defaulting to ${DEFAULT_HOURLY_COST_USD:.2f}/hr")
+    pricing_db = {"default": {"hourly_cost_usd": DEFAULT_HOURLY_COST_USD}}
 
-# GPU history: uuid -> deque of feature vectors [util, mem_ratio, temp_c, power_w]
-# maxlen=300 = 5min @ 1s per feature vector
-gpu_history: dict = {}
+# ---------------------------------------------------------------------------
+# Alert thresholds — authoritative constants
+# ---------------------------------------------------------------------------
+MAHALANOBIS_CRITICAL_THRESHOLD: float = 3.5
+IDLE_BURN_UTIL_CEIL: float = 5.0       # percent
+IDLE_BURN_POWER_FLOOR: float = 50.0    # watts
+ZOMBIE_UTIL_CEIL: float = 5.0          # percent
+ZOMBIE_VRAM_RATIO_FLOOR: float = 0.85
+HIGH_TEMP_CEIL: float = 78.0           # degrees Celsius
+NTP_DRIFT_CEIL_MS: float = 50.0        # milliseconds
 
-CALIBRATION_SAMPLES = 50
+# ---------------------------------------------------------------------------
+# Per-GPU sliding feature-vector history
+# maxlen=300 ≈ 5 min @ 1 sample/s
+# ---------------------------------------------------------------------------
+CALIBRATION_SAMPLES: int = 50
 
+gpu_history: Dict[str, deque] = {}
+
+# ---------------------------------------------------------------------------
+# Cumulative waste ledger (in-memory, persistent across ticks)
+# ---------------------------------------------------------------------------
+total_wasted_usd: float = 0.0
+
+
+# ---------------------------------------------------------------------------
+# Async Circuit Breaker
+# ---------------------------------------------------------------------------
 class AsyncCircuitBreaker:
-    def __init__(self):
-        self.state = "CLOSED"
-        self.failures = 0
-        self.threshold = 3
-        self.last_failure_time = 0
-        self.recovery_timeout = 30
+    """Three-state circuit breaker wrapping async callables."""
+
+    def __init__(self) -> None:
+        self.state: str = "CLOSED"
+        self.failures: int = 0
+        self.threshold: int = 3
+        self.last_failure_time: float = 0.0
+        self.recovery_timeout: int = 30
 
     async def call(self, func, *args, **kwargs):
         if self.state == "OPEN":
@@ -59,18 +97,34 @@ class AsyncCircuitBreaker:
                 print(f"[CIRCUIT BREAKER: TRIPPED TO OPEN] Failures exceeded {self.threshold}.")
             raise e
 
-cb = AsyncCircuitBreaker()
 
-async def fetch_metrics(stub):
+cb: AsyncCircuitBreaker = AsyncCircuitBreaker()
+
+
+async def fetch_metrics(stub: telemetry_pb2_grpc.GpuTelemetryStub):
+    """Single RPC call with a hard 2-second deadline."""
     return await stub.GetMetrics(telemetry_pb2.TelemetryRequest(), timeout=2.0)
 
-async def main():
+
+# ---------------------------------------------------------------------------
+# Main telemetry loop
+# ---------------------------------------------------------------------------
+async def main() -> None:
+    global total_wasted_usd
+
     print("Starting gRPC FinOps Engine (Mahalanobis)...")
+
+    # Track wall-clock between ticks for pro-rated billing
+    last_tick_time: float = time.perf_counter()
 
     async with grpc.aio.insecure_channel("localhost:50051") as channel:
         stub = telemetry_pb2_grpc.GpuTelemetryStub(channel)
+
         while True:
-            start_time = time.perf_counter()
+            tick_start: float = time.perf_counter()
+            elapsed_since_last_tick: float = tick_start - last_tick_time
+            last_tick_time = tick_start
+
             try:
                 response = await cb.call(fetch_metrics, stub)
 
@@ -79,57 +133,120 @@ async def main():
                 print("=" * 70)
 
                 for gpu in response.gpus:
-                    uuid = gpu.uuid
+                    uuid: str = gpu.uuid
 
-                    mem_ratio = gpu.memory_used_mb / gpu.memory_total_mb if gpu.memory_total_mb > 0 else 0
-                    feature_vector = [gpu.utilization_percent, mem_ratio, gpu.temperature_c, gpu.power_draw_w]
+                    mem_ratio: float = (
+                        gpu.memory_used_mb / gpu.memory_total_mb
+                        if gpu.memory_total_mb > 0
+                        else 0.0
+                    )
+                    feature_vector: list[float] = [
+                        gpu.utilization_percent,
+                        mem_ratio,
+                        gpu.temperature_c,
+                        gpu.power_draw_w,
+                    ]
 
+                    # ----- sliding window bookkeeping -----
                     if uuid not in gpu_history:
                         gpu_history[uuid] = deque(maxlen=300)
                     gpu_history[uuid].append(feature_vector)
 
-                    latest_power = gpu.power_draw_w
-                    cost_profile = pricing_db.get(uuid, pricing_db["default"])
-                    burn_rate = cost_profile["hourly_cost_usd"]
+                    # ----- pricing lookup -----
+                    cost_profile: Dict[str, Any] = pricing_db.get(
+                        uuid, pricing_db.get("default", {"hourly_cost_usd": DEFAULT_HOURLY_COST_USD})
+                    )
+                    burn_rate: float = cost_profile["hourly_cost_usd"]
 
-                    alerts = []
+                    # ----- alert evaluation (all thresholds, every tick) -----
+                    alerts: list[str] = []
+                    d_m_display: str = "N/A"
 
-                    n = len(gpu_history[uuid])
+                    latest_util: float = gpu.utilization_percent
+                    latest_power: float = gpu.power_draw_w
+                    latest_temp: float = gpu.temperature_c
+
+                    # --- Mahalanobis anomaly detection ---
+                    n: int = len(gpu_history[uuid])
                     if n < CALIBRATION_SAMPLES:
-                        alerts.append(f"[CALIBRATING: Gathering Baseline Data... ({n}/{CALIBRATION_SAMPLES})]")
+                        alerts.append(
+                            f"[CALIBRATING: Gathering Baseline Data... ({n}/{CALIBRATION_SAMPLES})]"
+                        )
                     else:
-                        arr = np.array(gpu_history[uuid])
-                        mean_vec = np.mean(arr, axis=0)
-                        cov = np.cov(arr, rowvar=False)
-                        cov_pinv = np.linalg.pinv(cov)
-                        x = np.array(feature_vector)
-                        d_m = mahalanobis(x, mean_vec, cov_pinv)
+                        arr: np.ndarray = np.array(gpu_history[uuid])
+                        mean_vec: np.ndarray = np.mean(arr, axis=0)
+                        cov: np.ndarray = np.cov(arr, rowvar=False)
+                        cov_pinv: np.ndarray = np.linalg.pinv(cov)
+                        x: np.ndarray = np.array(feature_vector)
+                        d_m: float = float(mahalanobis(x, mean_vec, cov_pinv))
+                        d_m_display = f"{d_m:.2f}"
 
-                        if d_m > 3.5:
-                            alerts.append(f"[CRITICAL ANOMALY: MULTI-VARIATE DEVIATION (D_M={d_m:.2f})]")
-                        else:
-                            alerts.append(f"[D_M={d_m:.2f}]")
+                        if d_m > MAHALANOBIS_CRITICAL_THRESHOLD:
+                            alerts.append(
+                                f"[CRITICAL ANOMALY: MULTI-VARIATE DEVIATION (D_M={d_m:.2f})]"
+                            )
 
-                    latest_util = gpu.utilization_percent
-                    if latest_util < 5 and latest_power > 50:
-                        alerts.append("[WARNING: IDLE BURN DETECTED]")
-                    if latest_util < 5 and mem_ratio > 0.90:
-                        alerts.append("[CRITICAL: ZOMBIE PROCESS DETECTED - VRAM HOG]")
+                    # --- Idle-burn condition ---
+                    is_idle_burn: bool = (
+                        latest_util < IDLE_BURN_UTIL_CEIL
+                        and latest_power > IDLE_BURN_POWER_FLOOR
+                    )
+                    if is_idle_burn:
+                        alerts.append("[ALERT: IDLE-BURN CONDITION]")
 
-                    alert_str = " | ".join(alerts)
-                    print(f"[{uuid[:15]}...] Pwr: {latest_power:.1f}W | Util: {latest_util:.0f}% | Temp: {gpu.temperature_c:.0f}C | Mem Ratio: {mem_ratio:.2f} | Rate: ${burn_rate:.2f}/hr | {alert_str}")
+                    # --- Zombie GPU detection ---
+                    is_zombie: bool = (
+                        latest_util < ZOMBIE_UTIL_CEIL
+                        and mem_ratio > ZOMBIE_VRAM_RATIO_FLOOR
+                    )
+                    if is_zombie:
+                        alerts.append("[ALERT: ZOMBIE GPU DETECTED]")
 
-                ntp_offset = response.ntp_offset_ms
-                if abs(ntp_offset) > 50:
-                    print(f"[CRITICAL TIME DRIFT] Host clock desynchronized by {ntp_offset}ms. Time-series math hazard.")
+                    # --- High temperature warning ---
+                    if latest_temp > HIGH_TEMP_CEIL:
+                        alerts.append("[ALERT: HIGH TEMPERATURE WARNING]")
 
-                loop_time_ms = (time.perf_counter() - start_time) * 1000
-                print(f"-> V2 Loop Execution Time (gRPC + Mahalanobis): {loop_time_ms:.2f} ms  |  NTP offset: {ntp_offset} ms")
+                    # ----- cumulative waste accounting -----
+                    if is_idle_burn or is_zombie:
+                        # Pro-rate the hourly cost to the exact elapsed interval
+                        tick_cost_usd: float = burn_rate * (elapsed_since_last_tick / 3600.0)
+                        total_wasted_usd += tick_cost_usd
+
+                    # ----- console output -----
+                    alert_str: str = " | ".join(alerts) if alerts else "OK"
+                    print(
+                        f"[{uuid[:15]}...] "
+                        f"Pwr: {latest_power:.1f}W | "
+                        f"Util: {latest_util:.0f}% | "
+                        f"Temp: {latest_temp:.0f}C | "
+                        f"Mem Ratio: {mem_ratio:.2f} | "
+                        f"Rate: ${burn_rate:.2f}/hr | "
+                        f"Accumulated Waste: ${total_wasted_usd:.6f} | "
+                        f"[D_M={d_m_display}]"
+                    )
+                    if alerts:
+                        for a in alerts:
+                            print(f"  >> {a}")
+
+                # ----- NTP time drift evaluation -----
+                ntp_offset: float = response.ntp_offset_ms
+                if abs(ntp_offset) > NTP_DRIFT_CEIL_MS:
+                    print(
+                        f"[CRITICAL TIME DRIFT] Host clock desynchronized by "
+                        f"{ntp_offset}ms. Time-series math hazard."
+                    )
+
+                loop_time_ms: float = (time.perf_counter() - tick_start) * 1000
+                print(
+                    f"-> V2 Loop Execution Time (gRPC + Mahalanobis): "
+                    f"{loop_time_ms:.2f} ms  |  NTP offset: {ntp_offset} ms"
+                )
 
             except Exception as e:
                 print(f"Engine Error: {e}")
 
             await asyncio.sleep(1)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
