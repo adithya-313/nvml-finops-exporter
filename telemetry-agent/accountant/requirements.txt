@@ -1,5 +1,4 @@
+grpcio
+grpcio-tools
 numpy
-scikit-learn
-nats-py
-psycopg2-binary
-protobuf
+scipy

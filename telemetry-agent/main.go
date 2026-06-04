@@ -1,36 +1,71 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
+	"net"
 	"sync"
 	"time"
 
 	"github.com/beevik/ntp"
-	"github.com/nats-io/nats.go"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 
 	"telemetry-agent/internal/gpu"
 	pb "telemetry-agent/internal/pb"
 )
 
-type telemetryAgent struct {
-	mu          sync.RWMutex
-	ntpOffsetMs int64
+type telemetryServer struct {
+	pb.UnimplementedGpuTelemetryServer
+	mu         sync.RWMutex
+	NtpOffsetMs int64
 }
 
-func (a *telemetryAgent) pollNTP() {
+func (s *telemetryServer) GetMetrics(ctx context.Context, req *pb.TelemetryRequest) (*pb.TelemetryResponse, error) {
+	currentState := gpu.CollectGpuMetrics()
+
+	ts := time.Now().Unix()
+	resp := &pb.TelemetryResponse{
+		SystemStatus: currentState.SystemStatus,
+		TimestampUtc: ts,
+	}
+
+	if currentState.ErrorMessage != nil {
+		resp.ErrorMessage = *currentState.ErrorMessage
+	}
+
+	s.mu.RLock()
+	resp.NtpOffsetMs = s.NtpOffsetMs
+	s.mu.RUnlock()
+
+	for _, g := range currentState.Gpus {
+		resp.Gpus = append(resp.Gpus, &pb.GpuMetric{
+			Uuid:               g.Uuid,
+			UtilizationPercent: float64(g.UtilizationPercent),
+			MemoryUsedMb:       g.MemoryUsedMb,
+			MemoryTotalMb:      g.MemoryTotalMb,
+			TemperatureC:       float64(g.TemperatureC),
+			PowerDrawW:         g.PowerDrawW,
+		})
+	}
+
+	return resp, nil
+}
+
+func pollNTP(s *telemetryServer) {
 	for {
 		response, err := ntp.Query("time.google.com")
 		if err != nil {
 			log.Printf("[NTP] query failed: %v (defaulting offset to 0)", err)
-			a.mu.Lock()
-			a.ntpOffsetMs = 0
-			a.mu.Unlock()
+			s.mu.Lock()
+			s.NtpOffsetMs = 0
+			s.mu.Unlock()
 		} else {
 			offset := response.ClockOffset.Milliseconds()
-			a.mu.Lock()
-			a.ntpOffsetMs = offset
-			a.mu.Unlock()
+			s.mu.Lock()
+			s.NtpOffsetMs = offset
+			s.mu.Unlock()
 			log.Printf("[NTP] clock offset: %d ms", offset)
 		}
 		time.Sleep(60 * time.Second)
@@ -38,54 +73,21 @@ func (a *telemetryAgent) pollNTP() {
 }
 
 func main() {
-	agent := &telemetryAgent{}
-	go agent.pollNTP()
+	server := &telemetryServer{}
 
-	nc, err := nats.Connect("nats://nats:4222")
+	go pollNTP(server)
+
+	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
-		log.Fatalf("failed to connect to NATS: %v", err)
+		log.Fatalf("failed to listen: %v", err)
 	}
-	defer nc.Close()
-	log.Println("connected to NATS at nats://nats:4222")
 
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
+	s := grpc.NewServer()
+	pb.RegisterGpuTelemetryServer(s, server)
+	reflection.Register(s)
 
-	for range ticker.C {
-		currentState := gpu.CollectGpuMetrics()
-		ts := time.Now().Unix()
-
-		resp := &pb.TelemetryResponse{
-			SystemStatus: currentState.SystemStatus,
-			TimestampUtc: ts,
-		}
-		if currentState.ErrorMessage != nil {
-			resp.ErrorMessage = *currentState.ErrorMessage
-		}
-
-		agent.mu.RLock()
-		resp.NtpOffsetMs = agent.ntpOffsetMs
-		agent.mu.RUnlock()
-
-		for _, g := range currentState.Gpus {
-			resp.Gpus = append(resp.Gpus, &pb.GpuMetric{
-				Uuid:               g.Uuid,
-				UtilizationPercent: float64(g.UtilizationPercent),
-				MemoryUsedMb:       g.MemoryUsedMb,
-				MemoryTotalMb:      g.MemoryTotalMb,
-				TemperatureC:       float64(g.TemperatureC),
-				PowerDrawW:         g.PowerDrawW,
-			})
-		}
-
-		data, err := proto.Marshal(resp)
-		if err != nil {
-			log.Printf("failed to marshal protobuf: %v", err)
-			continue
-		}
-
-		if err := nc.Publish("telemetry.gpu.metrics", data); err != nil {
-			log.Printf("failed to publish: %v", err)
-		}
+	fmt.Println("telemetry-agent gRPC server listening on :50051")
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
 	}
 }
