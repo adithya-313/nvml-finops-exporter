@@ -1,12 +1,5 @@
 {
-  "gpus": {
-    "GPU-mock-0000-0000-00000": {
-      "model": "NVIDIA GeForce RTX 4050 Laptop GPU",
-      "hourly_cost_usd": 0.45
-    },
-    "default": {
-      "model": "Generic Cloud GPU",
-      "hourly_cost_usd": 1.00
-    }
-  }
+  "NVIDIA A100-SXM4-80GB": 3.06,
+  "NVIDIA H100 80GB HBM3": 4.76,
+  "NVIDIA GeForce RTX 4050 Laptop GPU": 0.45
 }
