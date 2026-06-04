@@ -2,3 +2,4 @@ numpy
 scikit-learn
 nats-py
 psycopg2-binary
+protobuf
