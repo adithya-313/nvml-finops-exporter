@@ -1,4 +1,4 @@
-grpcio
-grpcio-tools
 numpy
-scipy
+scikit-learn
+nats-py
+psycopg2-binary

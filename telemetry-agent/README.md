@@ -27,14 +27,10 @@ A NATS-based telemetry and FinOps engine for NVIDIA GPU infrastructure. The stac
 ## Usage
 
 ```bash
-# Start the full stack (NATS, TimescaleDB, Go agent)
 docker compose up --build
-
-# Run the FinOps engine inside the Docker network (separate terminal)
-docker run -it --rm --network telemetry-agent_finops_net `
-  -v .\accountant:/app -w /app python:3.12-slim `
-  sh -c "pip install -q nats-py scikit-learn psycopg2-binary numpy && python engine.py"
 ```
+
+Starts all four services: NATS, TimescaleDB, Go agent (publisher), and Python FinOps engine (subscriber + ML + WAL sink). The engine auto-retries on startup until NATS and TimescaleDB are ready.
 
 ## Performance
 

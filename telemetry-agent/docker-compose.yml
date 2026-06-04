@@ -1,17 +1,36 @@
-version: '3.8'
-
 networks:
   finops_net:
     driver: bridge
 
 services:
-  agent:
-    build: .
+  nats:
+    image: nats:latest
     ports:
-      - "50051:50051"
+      - "4222:4222"
     networks:
       - finops_net
-    # GPU Passthrough (Will degrade gracefully to mock if unavailable)
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: postgres
+    networks:
+      - finops_net
+
+  engine:
+    build: ./accountant
+    depends_on:
+      - nats
+      - timescaledb
+    networks:
+      - finops_net
+
+  agent:
+    build: .
+    networks:
+      - finops_net
     deploy:
       resources:
         reservations:
