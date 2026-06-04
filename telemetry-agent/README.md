@@ -37,10 +37,10 @@ Latency reduced from **80 ms (V1 sync HTTP)** to **6.57 ms (V2 gRPC + Mahalanobi
 docker compose up --build
 ```
 
-### Run the FinOps engine (separate terminal)
+### Run the FinOps engine (separate terminal, from repo root)
 
 ```bash
-cd accountant
+cd ../accountant
 pip install -r requirements.txt
 python engine.py
 ```
