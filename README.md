@@ -54,3 +54,10 @@ To prove the Machine Learning engine works, open a 4th terminal and execute the 
 python stress_test.py
 ```
 Watch the Operations Dashboard immediately flag the massive power/utilization spike and cross the Mahalanobis threshold.
+
+### 💸 How to Demonstrate the Financial Waste Ledger
+To prove the pro-rated financial waste accumulator works, you can force the engine into a "Zombie GPU" state (stranded memory, idle compute) using the diagnostic flag:
+```powershell
+python engine.py --mock-zombie
+```
+Watch the `Accumulated Waste` strictly increment micro-dollar fractions on every telemetry tick.

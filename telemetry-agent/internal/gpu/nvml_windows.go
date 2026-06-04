@@ -36,6 +36,7 @@ var (
 	procDeviceGetMemoryInfo    *windows.Proc
 	procDeviceGetTemperature   *windows.Proc
 	procDeviceGetPowerUsage    *windows.Proc
+	procDeviceGetName          *windows.Proc
 )
 
 func nvmlLoadLibrary() error {
@@ -55,6 +56,7 @@ func nvmlLoadLibrary() error {
 		"nvmlDeviceGetMemoryInfo":       &procDeviceGetMemoryInfo,
 		"nvmlDeviceGetTemperature":      &procDeviceGetTemperature,
 		"nvmlDeviceGetPowerUsage":       &procDeviceGetPowerUsage,
+		"nvmlDeviceGetName":             &procDeviceGetName,
 	}
 
 	for name, ptr := range procedureMap {
@@ -122,6 +124,25 @@ func CollectGpuMetrics() SystemStatus {
 			metric.Uuid = string(uuidBuf[:uuidLen])
 		} else {
 			metric.Uuid = fmt.Sprintf("unknown-%d", deviceIndex)
+		}
+
+		// Name
+		const nameBufSize = 128
+		nameBuf := make([]byte, nameBufSize)
+		nameReturn, _, _ := procDeviceGetName.Call(
+			deviceHandle, uintptr(unsafe.Pointer(&nameBuf[0])), uintptr(nameBufSize),
+		)
+		if nameReturn == 0 {
+			nameLen := 0
+			for i := 0; i < nameBufSize; i++ {
+				if nameBuf[i] == 0 {
+					break
+				}
+				nameLen++
+			}
+			metric.Name = string(nameBuf[:nameLen])
+		} else {
+			metric.Name = fmt.Sprintf("unknown-%d", deviceIndex)
 		}
 
 		// Utilization

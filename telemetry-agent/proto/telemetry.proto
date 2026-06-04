@@ -21,6 +21,7 @@ message GpuMetric {
   uint64 memory_total_mb = 4;
   double temperature_c = 5;
   double power_draw_w = 6;
+  string name = 7;
 }
 
 message TelemetryResponse {

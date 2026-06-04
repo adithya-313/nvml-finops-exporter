@@ -26,16 +26,12 @@ _pricing_json_path: str = os.path.join(os.path.dirname(__file__), "pricing.json"
 try:
     with open(_pricing_json_path, "r", encoding="utf-8") as _f:
         _raw: Any = json.load(_f)
-        if not isinstance(_raw, dict) or "gpus" not in _raw:
-            raise ValueError("pricing.json schema invalid: missing top-level 'gpus' key")
-        pricing_db: Dict[str, Dict[str, Any]] = _raw["gpus"]
-        # Validate that every entry has the required field
-        for _key, _val in pricing_db.items():
-            if not isinstance(_val, dict) or "hourly_cost_usd" not in _val:
-                raise ValueError(f"pricing.json entry '{_key}' missing 'hourly_cost_usd'")
-except (FileNotFoundError, json.JSONDecodeError, ValueError, KeyError, TypeError) as _exc:
+        if not isinstance(_raw, dict):
+            raise ValueError("pricing.json schema invalid: expected flat dict")
+        pricing_db: Dict[str, float] = _raw
+except (FileNotFoundError, json.JSONDecodeError, ValueError, TypeError) as _exc:
     print(f"[WARN] pricing.json load failed ({_exc}); defaulting to ${DEFAULT_HOURLY_COST_USD:.2f}/hr")
-    pricing_db = {"default": {"hourly_cost_usd": DEFAULT_HOURLY_COST_USD}}
+    pricing_db = {"DEFAULT": DEFAULT_HOURLY_COST_USD}
 
 # ---------------------------------------------------------------------------
 # Alert thresholds — authoritative constants
@@ -60,6 +56,11 @@ gpu_history: Dict[str, deque] = {}
 # Cumulative waste ledger (in-memory, persistent across ticks)
 # ---------------------------------------------------------------------------
 total_wasted_usd: float = 0.0
+
+# ---------------------------------------------------------------------------
+# Diagnostic presentation toggle
+# ---------------------------------------------------------------------------
+MOCK_ZOMBIE_MODE: bool = "--mock-zombie" in sys.argv
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +115,11 @@ async def main() -> None:
 
     print("Starting gRPC FinOps Engine (Mahalanobis)...")
 
+    if MOCK_ZOMBIE_MODE:
+        print("\033[93m" + "=" * 70)
+        print("[DIAGNOSTIC MODE ACTIVE: FORCING ZOMBIE GPU STATE FOR LEDGER DEMONSTRATION]")
+        print("=" * 70 + "\033[0m")
+
     # Track wall-clock between ticks for pro-rated billing
     last_tick_time: float = time.perf_counter()
 
@@ -135,6 +141,11 @@ async def main() -> None:
                 for gpu in response.gpus:
                     uuid: str = gpu.uuid
 
+                    # --mock-zombie override: force zombie GPU metrics for demo
+                    if MOCK_ZOMBIE_MODE:
+                        gpu.utilization_percent = 2.0
+                        gpu.memory_used_mb = int(gpu.memory_total_mb * 0.95)
+
                     mem_ratio: float = (
                         gpu.memory_used_mb / gpu.memory_total_mb
                         if gpu.memory_total_mb > 0
@@ -152,11 +163,13 @@ async def main() -> None:
                         gpu_history[uuid] = deque(maxlen=300)
                     gpu_history[uuid].append(feature_vector)
 
-                    # ----- pricing lookup -----
-                    cost_profile: Dict[str, Any] = pricing_db.get(
-                        uuid, pricing_db.get("default", {"hourly_cost_usd": DEFAULT_HOURLY_COST_USD})
-                    )
-                    burn_rate: float = cost_profile["hourly_cost_usd"]
+                    # ----- pricing lookup (substring matching) -----
+                    gpu_name_lower: str = gpu.name.lower()
+                    burn_rate: float = DEFAULT_HOURLY_COST_USD
+                    for _key, _rate in pricing_db.items():
+                        if _key.lower() in gpu_name_lower:
+                            burn_rate = _rate
+                            break
 
                     # ----- alert evaluation (all thresholds, every tick) -----
                     alerts: list[str] = []

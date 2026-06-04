@@ -20,6 +20,7 @@ func init() {
 type nvidiaSmiGpuRaw struct {
 	Index          string
 	Uuid           string
+	Name           string
 	UtilizationGpu string
 	MemoryUsed     string
 	MemoryTotal    string
@@ -52,7 +53,7 @@ func CollectGpuMetrics() SystemStatus {
 
 func queryNvidiaSmi() ([]nvidiaSmiGpuRaw, error) {
 	cmd := exec.Command("nvidia-smi",
-		"--query-gpu=index,uuid,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
+		"--query-gpu=index,uuid,name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
 		"--format=csv,noheader,nounits",
 	)
 	outputBytes, runError := cmd.Output()
@@ -65,17 +66,18 @@ func queryNvidiaSmi() ([]nvidiaSmiGpuRaw, error) {
 
 	for _, line := range outputLines {
 		fields := strings.Split(line, ", ")
-		if len(fields) < 7 {
+		if len(fields) < 8 {
 			continue
 		}
 		rawGpus = append(rawGpus, nvidiaSmiGpuRaw{
 			Index:          strings.TrimSpace(fields[0]),
 			Uuid:           strings.TrimSpace(fields[1]),
-			UtilizationGpu: strings.TrimSpace(fields[2]),
-			MemoryUsed:     strings.TrimSpace(fields[3]),
-			MemoryTotal:    strings.TrimSpace(fields[4]),
-			TemperatureGpu: strings.TrimSpace(fields[5]),
-			PowerDraw:      strings.TrimSpace(fields[6]),
+			Name:           strings.TrimSpace(fields[2]),
+			UtilizationGpu: strings.TrimSpace(fields[3]),
+			MemoryUsed:     strings.TrimSpace(fields[4]),
+			MemoryTotal:    strings.TrimSpace(fields[5]),
+			TemperatureGpu: strings.TrimSpace(fields[6]),
+			PowerDraw:      strings.TrimSpace(fields[7]),
 		})
 	}
 
@@ -86,7 +88,7 @@ func parseNvidiaSmiOutput(rawGpus []nvidiaSmiGpuRaw) []GpuMetric {
 	gpuMetrics := make([]GpuMetric, 0, len(rawGpus))
 
 	for _, raw := range rawGpus {
-		metric := GpuMetric{Uuid: raw.Uuid}
+		metric := GpuMetric{Uuid: raw.Uuid, Name: raw.Name}
 
 		if utilValue, parseError := strconv.ParseUint(raw.UtilizationGpu, 10, 32); parseError == nil {
 			metric.UtilizationPercent = uint(utilValue)
@@ -145,6 +147,7 @@ func generateMockMetrics() SystemStatus {
 
 	mockGpu := GpuMetric{
 		Uuid:               "GPU-mock-0000-0000-000000000001",
+		Name:               "NVIDIA GeForce RTX 4050 Laptop GPU",
 		UtilizationPercent: uint(utilJitter),
 		MemoryUsedMb:       uint64(memJitter),
 		MemoryTotalMb:      8192,

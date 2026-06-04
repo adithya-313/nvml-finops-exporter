@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v7.35.0
-// source: proto/telemetry.proto
+// source: telemetry.proto
 
 package pb
 
@@ -30,7 +30,7 @@ type TelemetryRequest struct {
 
 func (x *TelemetryRequest) Reset() {
 	*x = TelemetryRequest{}
-	mi := &file_proto_telemetry_proto_msgTypes[0]
+	mi := &file_telemetry_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -42,7 +42,7 @@ func (x *TelemetryRequest) String() string {
 func (*TelemetryRequest) ProtoMessage() {}
 
 func (x *TelemetryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_telemetry_proto_msgTypes[0]
+	mi := &file_telemetry_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55,7 +55,7 @@ func (x *TelemetryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TelemetryRequest.ProtoReflect.Descriptor instead.
 func (*TelemetryRequest) Descriptor() ([]byte, []int) {
-	return file_proto_telemetry_proto_rawDescGZIP(), []int{0}
+	return file_telemetry_proto_rawDescGZIP(), []int{0}
 }
 
 type GpuMetric struct {
@@ -66,13 +66,14 @@ type GpuMetric struct {
 	MemoryTotalMb      uint64                 `protobuf:"varint,4,opt,name=memory_total_mb,json=memoryTotalMb,proto3" json:"memory_total_mb,omitempty"`
 	TemperatureC       float64                `protobuf:"fixed64,5,opt,name=temperature_c,json=temperatureC,proto3" json:"temperature_c,omitempty"`
 	PowerDrawW         float64                `protobuf:"fixed64,6,opt,name=power_draw_w,json=powerDrawW,proto3" json:"power_draw_w,omitempty"`
+	Name               string                 `protobuf:"bytes,7,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
 
 func (x *GpuMetric) Reset() {
 	*x = GpuMetric{}
-	mi := &file_proto_telemetry_proto_msgTypes[1]
+	mi := &file_telemetry_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -84,7 +85,7 @@ func (x *GpuMetric) String() string {
 func (*GpuMetric) ProtoMessage() {}
 
 func (x *GpuMetric) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_telemetry_proto_msgTypes[1]
+	mi := &file_telemetry_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -97,7 +98,7 @@ func (x *GpuMetric) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GpuMetric.ProtoReflect.Descriptor instead.
 func (*GpuMetric) Descriptor() ([]byte, []int) {
-	return file_proto_telemetry_proto_rawDescGZIP(), []int{1}
+	return file_telemetry_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *GpuMetric) GetUuid() string {
@@ -142,6 +143,13 @@ func (x *GpuMetric) GetPowerDrawW() float64 {
 	return 0
 }
 
+func (x *GpuMetric) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 type TelemetryResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SystemStatus  string                 `protobuf:"bytes,1,opt,name=system_status,json=systemStatus,proto3" json:"system_status,omitempty"`
@@ -155,7 +163,7 @@ type TelemetryResponse struct {
 
 func (x *TelemetryResponse) Reset() {
 	*x = TelemetryResponse{}
-	mi := &file_proto_telemetry_proto_msgTypes[2]
+	mi := &file_telemetry_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -167,7 +175,7 @@ func (x *TelemetryResponse) String() string {
 func (*TelemetryResponse) ProtoMessage() {}
 
 func (x *TelemetryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_telemetry_proto_msgTypes[2]
+	mi := &file_telemetry_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -180,7 +188,7 @@ func (x *TelemetryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TelemetryResponse.ProtoReflect.Descriptor instead.
 func (*TelemetryResponse) Descriptor() ([]byte, []int) {
-	return file_proto_telemetry_proto_rawDescGZIP(), []int{2}
+	return file_telemetry_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *TelemetryResponse) GetSystemStatus() string {
@@ -218,12 +226,12 @@ func (x *TelemetryResponse) GetNtpOffsetMs() int64 {
 	return 0
 }
 
-var File_proto_telemetry_proto protoreflect.FileDescriptor
+var File_telemetry_proto protoreflect.FileDescriptor
 
-const file_proto_telemetry_proto_rawDesc = "" +
+const file_telemetry_proto_rawDesc = "" +
 	"\n" +
-	"\x15proto/telemetry.proto\x12\ftelemetry.v1\"\x12\n" +
-	"\x10TelemetryRequest\"\xe5\x01\n" +
+	"\x0ftelemetry.proto\x12\ftelemetry.v1\"\x12\n" +
+	"\x10TelemetryRequest\"\xf9\x01\n" +
 	"\tGpuMetric\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\x12/\n" +
 	"\x13utilization_percent\x18\x02 \x01(\x01R\x12utilizationPercent\x12$\n" +
@@ -231,7 +239,8 @@ const file_proto_telemetry_proto_rawDesc = "" +
 	"\x0fmemory_total_mb\x18\x04 \x01(\x04R\rmemoryTotalMb\x12#\n" +
 	"\rtemperature_c\x18\x05 \x01(\x01R\ftemperatureC\x12 \n" +
 	"\fpower_draw_w\x18\x06 \x01(\x01R\n" +
-	"powerDrawW\"\xd3\x01\n" +
+	"powerDrawW\x12\x12\n" +
+	"\x04name\x18\a \x01(\tR\x04name\"\xd3\x01\n" +
 	"\x11TelemetryResponse\x12#\n" +
 	"\rsystem_status\x18\x01 \x01(\tR\fsystemStatus\x12#\n" +
 	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x12+\n" +
@@ -243,24 +252,24 @@ const file_proto_telemetry_proto_rawDesc = "" +
 	"GetMetrics\x12\x1e.telemetry.v1.TelemetryRequest\x1a\x1f.telemetry.v1.TelemetryResponseB9Z7github.com/adithya-313/nvml-finops-exporter/internal/pbb\x06proto3"
 
 var (
-	file_proto_telemetry_proto_rawDescOnce sync.Once
-	file_proto_telemetry_proto_rawDescData []byte
+	file_telemetry_proto_rawDescOnce sync.Once
+	file_telemetry_proto_rawDescData []byte
 )
 
-func file_proto_telemetry_proto_rawDescGZIP() []byte {
-	file_proto_telemetry_proto_rawDescOnce.Do(func() {
-		file_proto_telemetry_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_proto_telemetry_proto_rawDesc), len(file_proto_telemetry_proto_rawDesc)))
+func file_telemetry_proto_rawDescGZIP() []byte {
+	file_telemetry_proto_rawDescOnce.Do(func() {
+		file_telemetry_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_telemetry_proto_rawDesc), len(file_telemetry_proto_rawDesc)))
 	})
-	return file_proto_telemetry_proto_rawDescData
+	return file_telemetry_proto_rawDescData
 }
 
-var file_proto_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
-var file_proto_telemetry_proto_goTypes = []any{
+var file_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_telemetry_proto_goTypes = []any{
 	(*TelemetryRequest)(nil),  // 0: telemetry.v1.TelemetryRequest
 	(*GpuMetric)(nil),         // 1: telemetry.v1.GpuMetric
 	(*TelemetryResponse)(nil), // 2: telemetry.v1.TelemetryResponse
 }
-var file_proto_telemetry_proto_depIdxs = []int32{
+var file_telemetry_proto_depIdxs = []int32{
 	1, // 0: telemetry.v1.TelemetryResponse.gpus:type_name -> telemetry.v1.GpuMetric
 	0, // 1: telemetry.v1.GpuTelemetry.GetMetrics:input_type -> telemetry.v1.TelemetryRequest
 	2, // 2: telemetry.v1.GpuTelemetry.GetMetrics:output_type -> telemetry.v1.TelemetryResponse
@@ -271,26 +280,26 @@ var file_proto_telemetry_proto_depIdxs = []int32{
 	0, // [0:1] is the sub-list for field type_name
 }
 
-func init() { file_proto_telemetry_proto_init() }
-func file_proto_telemetry_proto_init() {
-	if File_proto_telemetry_proto != nil {
+func init() { file_telemetry_proto_init() }
+func file_telemetry_proto_init() {
+	if File_telemetry_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_telemetry_proto_rawDesc), len(file_proto_telemetry_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_telemetry_proto_rawDesc), len(file_telemetry_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_proto_telemetry_proto_goTypes,
-		DependencyIndexes: file_proto_telemetry_proto_depIdxs,
-		MessageInfos:      file_proto_telemetry_proto_msgTypes,
+		GoTypes:           file_telemetry_proto_goTypes,
+		DependencyIndexes: file_telemetry_proto_depIdxs,
+		MessageInfos:      file_telemetry_proto_msgTypes,
 	}.Build()
-	File_proto_telemetry_proto = out.File
-	file_proto_telemetry_proto_goTypes = nil
-	file_proto_telemetry_proto_depIdxs = nil
+	File_telemetry_proto = out.File
+	file_telemetry_proto_goTypes = nil
+	file_telemetry_proto_depIdxs = nil
 }

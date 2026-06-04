@@ -1,5 +1,6 @@
 {
-  "NVIDIA A100-SXM4-80GB": 3.06,
-  "NVIDIA H100 80GB HBM3": 4.76,
-  "NVIDIA GeForce RTX 4050 Laptop GPU": 0.45
+  "A100": 3.06,
+  "H100": 4.76,
+  "RTX 4050": 0.45,
+  "DEFAULT": 1.00
 }

@@ -42,6 +42,7 @@ func (s *telemetryServer) GetMetrics(ctx context.Context, req *pb.TelemetryReque
 	for _, g := range currentState.Gpus {
 		resp.Gpus = append(resp.Gpus, &pb.GpuMetric{
 			Uuid:               g.Uuid,
+			Name:               g.Name,
 			UtilizationPercent: float64(g.UtilizationPercent),
 			MemoryUsedMb:       g.MemoryUsedMb,
 			MemoryTotalMb:      g.MemoryTotalMb,

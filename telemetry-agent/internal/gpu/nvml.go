@@ -7,6 +7,7 @@ import (
 // GpuMetric represents a snapshot of a single GPU's telemetry data.
 type GpuMetric struct {
 	Uuid               string  `json:"uuid"`
+	Name               string  `json:"name"`
 	UtilizationPercent uint    `json:"utilization_percent"`
 	MemoryUsedMb       uint64  `json:"memory_used_mb"`
 	MemoryTotalMb      uint64  `json:"memory_total_mb"`
