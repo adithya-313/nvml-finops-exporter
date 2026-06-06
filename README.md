@@ -1,63 +1,65 @@
 # NVIDIA GPU Telemetry & FinOps Pipeline (v2.1-Enterprise)
 
-A real-time, distributed gRPC telemetry pipeline tracking high-frequency NVIDIA GPU metrics, multi-variate statistical anomalies, clock desynchronization, and structural financial losses.
+A real-time, distributed gRPC telemetry pipeline tracking high-frequency NVIDIA GPU metrics, multi-variate statistical anomalies, clock desynchronization, and structural financial losses. Designed for scalable AI infrastructure.
 
-## 🧠 System Architecture
+## 🧠 System Architecture & Scalability
 
-- **Go gRPC Telemetry Agent (`main.go`):** Exposes a `GpuTelemetry` service on port `:50051`. Backed by native `nvml.dll` system calls to extract microsecond-level hardware state directly from the silicon. Includes a background `pollNTP()` goroutine syncing with `time.google.com`.
-- **Python FinOps Engine (`accountant/engine.py`):** An asynchronous `grpc.aio` client that continuously streams metrics. Evaluates hardware states against dynamic financial threshold rules.
-- **React Operations Dashboard (`dashboard/`):** A Vite-based UI mapping 4D telemetry vectors into visual states and real-time accumulating financial losses.
+This pipeline uses a decoupled microservice architecture designed to scale across GPU clusters:
+- **Stateless Extraction (Go Agent):** A lightweight daemon (`main.go`) deployed per-node. Queries `nvml` directly. Takes < 15MB RAM.
+- **Asynchronous Aggregation (Python Engine):** A central ML brain using `grpc.aio` over HTTP/2 multiplexing to ingest thousands of concurrent node streams without thread-blocking.
+- **Constant-Time Math:** Multi-variate Mahalanobis distance calculated via vectorized C-bindings in `NumPy` (`np.linalg.pinv`), preventing O(n^2) scaling bottlenecks.
 
 ## ⚡ Core Features
+- **Mahalanobis Multi-Variate Anomaly Detection:** $D_M > 3.5$ triggers `[CRITICAL ANOMALY: MULTI-VARIATE DEVIATION]`.
+- **Wasted Spend Calculation:** Dynamically tracks idle-burn and zombie GPUs, calculating pro-rated dollar-loss to the millisecond.
+- **NTP Time Drift Tracking:** Detects host-clock desynchronization > 50ms.
+- **Async Circuit Breaker:** Protects the gRPC stream with a 30s recovery timeout on failure.
 
-- **Mahalanobis Multi-Variate Anomaly Detection:** Computes distance across 4 dimensions simultaneously (Utilization, Memory, Temp, Power). Inverts the covariance matrix via `np.linalg.pinv` to prevent singular matrix crashes during data flatlines. $D_M > 3.5$ triggers `[CRITICAL ANOMALY: MULTI-VARIATE DEVIATION]`.
-- **Wasted Spend Calculation:** Dynamically tracks idle-burn (Util < 5% & Power > 50W) and zombie GPUs (Util < 5% & VRAM > 0.85). Calculates exact dollar-loss pro-rated to the millisecond.
-- **NTP Time Drift Tracking:** Detects host-clock desynchronization. Drift > 50ms fires `[CRITICAL TIME DRIFT]`.
-- **Async Circuit Breaker:** Protects the gRPC stream. Three failures trigger an OPEN circuit for a 30s recovery timeout.
-
-## 📈 Validated Performance Profile
-Latency was aggressively optimized by eliminating sequential HTTP JSON polling and migrating to HTTP/2 gRPC.
-* **V1 Prototype (Sync HTTP):** `~80.00 ms` per loop.
-* **V2 Enterprise (gRPC + Mahalanobis ML):** `~6.57 ms` per loop.
-* **Result:** **91.8% Latency Reduction** with significantly higher mathematical complexity.
+## 📈 Validated Performance Profile (gRPC vs REST)
+Latency was aggressively optimized by eliminating sequential HTTP JSON polling.
+* **V1 Prototype (Sync HTTP/JSON):** `~80.00 ms` per loop.
+* **V2 Enterprise (gRPC/Protobuf):** `~6.57 ms` per loop.
+* **Result:** **91.8% Latency Reduction**.
 
 ---
 
-## 🚀 Live Interview Execution Manual
+## 🏭 Production Deployment (Docker / Cluster)
+For standard cloud deployment, the pipeline is fully containerized.
 
-To demonstrate the live hardware pipeline tracking actual silicon metrics, run these three commands in **three separate native terminal windows** (Do not use Docker for the live hardware demo).
+```bash
+# Build and deploy the Go hardware-extraction layer and Python brain
+docker compose up -d --build
 
-### Step 1: Start the Extract Layer (Go)
+# View real-time aggregated logs
+docker compose logs -f
+```
+(Note: Docker execution isolates the Go daemon from bare-metal Windows NVML drivers. For physical hardware validation, use the Local Development Mode below).
+
+## 💻 Local Development & Diagnostic Mode
+For local development or live hardware validation on a single node, bypass Docker and execute natively.
+
+### 1. Start the Pipeline Natively (3 Terminals)
 ```powershell
-cd telemetry-agent
-go run main.go
+# Terminal 1: Hardware Layer
+cd telemetry-agent && go run main.go
+
+# Terminal 2: ML Engine
+cd accountant && python engine.py
+
+# Terminal 3: UI
+cd dashboard && npm run dev
 ```
 
-### Step 2: Start the Analytics Brain (Python)
-```powershell
-cd accountant
-python engine.py
-```
+### 2. Run a Hardware Stress Test
+To validate the anomaly detection engine against physical silicon, launch the native CUDA load generator:
 
-### Step 3: Launch the Operations UI (React)
-```powershell
-cd dashboard
-npm run dev
-```
-
-⚠️ **Note: Why Native Execution instead of Docker?**
-During local demonstrations, running the Go Agent in Docker isolates it behind the WSL2 VM boundary, preventing access to the physical NVIDIA driver. Native execution allows the Go code to hook directly into Windows `nvml.dll`, enabling live stress-testing of the actual local GPU. (For production, the standard `docker compose up --build` deployment remains the designated cloud strategy).
-
-### 🔥 How to Trigger a Live Anomaly (Stress Test)
-To prove the Machine Learning engine works, open a 4th terminal and execute the native CUDA load generator:
 ```powershell
 python stress_test.py
 ```
-Watch the Operations Dashboard immediately flag the massive power/utilization spike and cross the Mahalanobis threshold.
 
-### 💸 How to Demonstrate the Financial Waste Ledger
-To prove the pro-rated financial waste accumulator works, you can force the engine into a "Zombie GPU" state (stranded memory, idle compute) using the diagnostic flag:
+### 3. FinOps Ledger Diagnostics
+To test the financial waste accumulator without requiring a physical VRAM leak, trigger the diagnostic flag:
+
 ```powershell
 python engine.py --mock-zombie
 ```
-Watch the `Accumulated Waste` strictly increment micro-dollar fractions on every telemetry tick.
